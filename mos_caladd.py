@@ -9,6 +9,7 @@ import dateutil.relativedelta as drel
 import sys
 import urllib, urllib2, getpass, time
 from cookielib import CookieJar
+from BeautifulSoup import BeautifulSoup
 
 event =  {
   "category":       "",
@@ -28,7 +29,6 @@ event =  {
 }
 
 
-
 BASEURL = 'https://metalab.at'
 
 dates = dr.rrule(**event['date'])
@@ -41,22 +41,33 @@ print """Adding new events to calendar:
   event['wikiPage'], event['time'][0], event['time'][1])
 print '\t'+'\n\t'.join([d.strftime('%a, %d.%m.%Y') for d in dates])
 
+
+posthandler = urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar()))
+
+content = posthandler.open(BASEURL+'/member/login/').read()
+
+soup = BeautifulSoup(content)
+csrftoken= soup.findAll('input', attrs={'name': "csrfmiddlewaretoken"})[0].get("value")
+
+
 print '\nusername: ',
 username = sys.stdin.readline().rstrip('\n')
 password = getpass.getpass('password: ')
 
-posthandler = urllib2.build_opener(urllib2.HTTPCookieProcessor(CookieJar()))
-
 data = {    'next'    : '',
+            'csrfmiddlewaretoken' : csrftoken,
             'password': password,
             'username': username}
 
-
+posthandler.addheaders = [('Referer', BASEURL+'/member/login/')]
 content = posthandler.open(BASEURL+'/member/login/', data=urllib.urlencode(data)).read()
 if ('Please try again' in content):
   print 'Your username and password didn\'t match. Please try again.'
   sys.exit(1)
 print 'login successful, adding events:'
+
+soup = BeautifulSoup(content)
+csrftoken= soup.findAll('input', attrs={'name': "csrfmiddlewaretoken"})[0].get("value")
 
 eventdata = {
   "category":     event['category'],
@@ -66,6 +77,7 @@ eventdata = {
   "startDate_1":  event['time'][0],
   "teaser":       event['teaser'],
   "wikiPage":     event['wikiPage'],
+  'csrfmiddlewaretoken' : csrftoken
 }
 
 for d in dates:
